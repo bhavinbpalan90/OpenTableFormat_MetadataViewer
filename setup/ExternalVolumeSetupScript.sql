@@ -1,4 +1,25 @@
--- Switch to SYSADMIN role to perform database/schema/table operations
+/********************************************************************************************
+-- Script Summary:
+-- This Snowflake script automates the process of extracting metadata from external volumes
+-- (S3) and storing it in a structured table for further use.
+--
+-- Key Steps:
+-- 1. Create database and schema if they do not exist.
+-- 2. Create a table to store external volume information.
+-- 3. List all external volumes and extract their S3 paths and storage regions.
+-- 4. Construct a nested JSON object representing volumes -> regions -> S3 paths.
+-- 5. Flatten the JSON and insert it into the EXTERNAL_VOLUME_PATHS table.
+-- 6. Grant necessary permissions for SYSADMIN role.
+-- 7. Verify the data.
+--
+-- Placeholders / Notes:
+--   - Replace database/schema/table names if needed.
+--   - Script assumes S3 external volumes are already created and accessible.
+--   - Optional: truncate table before full refresh if required.
+********************************************************************************************/
+
+---------------------------------------------------------------------------------------------
+-- Step 1: Switch to SYSADMIN role to perform database/schema/table operations
 USE ROLE SYSADMIN;
 
 -- Create the database if it doesn't exist
