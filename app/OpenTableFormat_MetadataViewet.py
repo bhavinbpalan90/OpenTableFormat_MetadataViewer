@@ -64,8 +64,6 @@ def safe_cortex_call(record):
     except Exception as e:
         return f"AI summary skipped: {e}"
 
-
-
 # ---------- Utility: Parquet metadata ----------
 def show_parquet_metadata(local_file_path: str):
     parquet_file = pq.ParquetFile(local_file_path)
@@ -183,50 +181,39 @@ def render_parquet_view(metadata_dict):
             "row_groups": metadata_dict["row_groups"]
         })
 
-# ---------- Utility: JSON / AVRO view ----------
-def render_json_avro_view(records:list, file_path:str):
+def render_json_avro_view(records: list, file_path: str):
     st.subheader("📄 File Information")
     with st.expander("Raw File View", expanded=False):
         try:
-            with open(file_path,"r",encoding="utf-8") as f:
-                st.json(json.load(f) if file_path.lower().endswith(".json") else records)
-        except Exception:
-            st.write(records)
+            with open(file_path, "r", encoding="utf-8") as f:
+                try:
+                    obj = json.load(f)
+                    records = obj if isinstance(obj, list) else [obj]
+                except json.JSONDecodeError:
+                    f.seek(0)
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            records.append(json.loads(line))
+                        except Exception:
+                            records.append({"raw_line": line})
+
+            st.json(records if records else {"info": "No valid records found"})
+
+        except Exception as e:
+            st.write(f"Unable to load JSON: {e}")
+            st.write(records if records else "No records available")
+
     with st.expander("Tabular Format", expanded=False):
         if records:
-            st.dataframe(pd.DataFrame(records))
+            try:
+                st.dataframe(pd.DataFrame(records))
+            except Exception:
+                st.write(records)
         else:
             st.write("No records available.")
-    
-
-# ---------- Sidebar: Stage & Submit ----------
-with st.sidebar:
-    st.subheader("🗂 Stage & File Access")
-    with st.spinner("Fetching stages..."):
-        try:
-            stages_df=session.sql("SHOW STAGES IN ACCOUNT").to_pandas()
-            stages_df.columns=[c.strip('"').upper() for c in stages_df.columns]
-            stages_df=stages_df[stages_df['TYPE']=='EXTERNAL']
-            stages_df['FULL_NAME']=stages_df['DATABASE_NAME']+'.'+stages_df['SCHEMA_NAME']+'.'+stages_df['NAME']
-            stage_names=['Select One']+sorted(stages_df['FULL_NAME'].tolist())
-        except Exception as e:
-            st.error(f"Error retrieving stages: {e}")
-            st.stop()
-
-    if "selected_stage" not in st.session_state:
-        st.session_state.selected_stage=None
-
-    stage_choice=st.selectbox("Select Stage", stage_names,key="stage_choice")
-    if st.button("Submit Stage"):
-        if stage_choice!="Select One":
-            st.session_state.selected_stage=stage_choice
-        else:
-            st.warning("Please select a valid stage before submitting.")
-
-    if st.session_state.get("selected_stage"):
-        st.sidebar.success(f"✅ Finalized Stage: {st.session_state['selected_stage']}")
-
-    selected_stage=st.session_state.get("selected_stage")
 
 # ---------- Database selection ----------
 st.subheader("📦 Select Iceberg Table")
@@ -250,8 +237,8 @@ if selected_db=="Select One":
     st.stop()
 
 # ---------- Iceberg Tables ----------
-with st.spinner("Fetching Iceberg tables..."):
-    try:
+try:
+    with st.spinner("Fetching Iceberg tables..."):
         iceberg_query=f"""
             SELECT (TABLE_CATALOG||'.'||TABLE_SCHEMA||'.'||TABLE_NAME) AS TABLE_NAME,
                    ROW_COUNT,BYTES,CREATED,LAST_DDL,IS_DYNAMIC
@@ -259,29 +246,40 @@ with st.spinner("Fetching Iceberg tables..."):
             WHERE TABLE_TYPE='BASE TABLE' AND IS_ICEBERG='YES'
         """
         iceberg_tables=session.sql(iceberg_query).to_pandas()
-        table_names=['Select One']+sorted(iceberg_tables['TABLE_NAME'].tolist())
-    except Exception as e:
-        st.error(f"Error retrieving Iceberg tables: {e}")
+
+    if iceberg_tables.empty:
+        st.warning(f"No Iceberg tables found in database `{selected_db}`.")
         st.stop()
 
-if "selected_table_final" not in st.session_state:
-    st.session_state.selected_table_final=None
+except Exception as e:
+    st.error(f"Error retrieving Iceberg tables: {e}")
+    st.stop()
 
-selected_table_choice=st.selectbox("Select an Iceberg Table",table_names,key="selected_table_choice")
+# ---------- Iceberg Table Selection ----------
+if "selected_table_final" not in st.session_state:
+    st.session_state.selected_table_final = None
+
+selected_table_choice = st.selectbox("Select an Iceberg Table", ['Select One'] + sorted(iceberg_tables['TABLE_NAME'].tolist()), key="selected_table_choice")
+
 if st.button("Submit Table"):
-    if selected_table_choice!="Select One":
-        st.session_state.selected_table_final=selected_table_choice
-        st.sidebar.success(f"✅ Finalized Table: {selected_table_choice}")
+    if selected_table_choice != "Select One":
+        st.session_state.selected_table_final = selected_table_choice
+        st.success(f"✅ Finalized Table: {selected_table_choice}")
     else:
         st.warning("Please select an Iceberg table before submitting.")
 
-selected_table=st.session_state.get("selected_table_final")
+selected_table = st.session_state.get("selected_table_final")
 if not selected_table:
     st.info("Please select an Iceberg table and click 'Submit Table' to continue.")
     st.stop()
 
 # ---------- Show selected table metadata ----------
-table_info = iceberg_tables[iceberg_tables['TABLE_NAME']==selected_table].iloc[0]
+table_info = iceberg_tables[iceberg_tables['TABLE_NAME'] == selected_table]
+if table_info.empty:
+    st.error(f"Selected table `{selected_table}` not found.")
+    st.stop()
+table_info = table_info.iloc[0]
+
 st.subheader(f"Metadata for {selected_table}")
 st.write(f"**Table Name:** {table_info['TABLE_NAME']}")
 st.write(f"**Row Count:** {table_info['ROW_COUNT']}")
@@ -290,77 +288,86 @@ st.write(f"**Created:** {format_dates(table_info['CREATED'])}")
 st.write(f"**Last DDL:** {format_dates(table_info['LAST_DDL'])}")
 st.write(f"**Is Dynamic:** {table_info['IS_DYNAMIC']}")
 
-# ---------- BASE_LOCATION ----------
-with st.spinner("Getting BASE_LOCATION..."):
+# ---------- Extract DDL Details ----------
+with st.spinner("Extracting DDL details..."):
     try:
-        ddl_df=session.sql(f"SELECT GET_DDL('TABLE','{selected_table}') AS DDL").to_pandas()
-        ddl=ddl_df['DDL'][0]
-        match=re.search(r"BASE_LOCATION\s*=\s*['\"]([^'\"]+)['\"]",ddl,re.IGNORECASE|re.MULTILINE)
-        base_location=match.group(1) if match else None
-        if not base_location:
-            for line in ddl.splitlines():
-                if "BASE_LOCATION" in line.upper():
-                    base_location=line.split("=")[1].strip(" '\"\t,")
-                    break
-        if not base_location:
-            st.error("❌ BASE_LOCATION not found in DDL.")
-            st.code(ddl)
-            st.stop()
-        base_location=base_location.rstrip("/")
-        st.success(f"📂 BASE_LOCATION: `{base_location}`")
-    except Exception as e:
-        st.error(f"Error extracting BASE_LOCATION from DDL: {e}")
-        st.stop()
+        ddl_df = session.sql(f"SELECT GET_DDL('TABLE','{selected_table}') AS DDL").to_pandas()
+        ddl = ddl_df['DDL'][0]
 
-# ---------- Resolve External Volume and LS pattern ----------
-with st.spinner("Resolving External Volume and file prefix..."):
-    try:
         ev_match = re.search(r"EXTERNAL_VOLUME\s*=\s*['\"]([^'\"]+)['\"]", ddl, re.IGNORECASE)
         external_volume_name = ev_match.group(1) if ev_match else None
-        if not external_volume_name:
-            st.error("❌ EXTERNAL_VOLUME not found in table DDL.")
-            st.code(ddl)
-            st.stop()
 
+        catalog_match = re.search(r"CATALOG\s*=\s*['\"]([^'\"]+)['\"]", ddl, re.IGNORECASE)
+        catalog_name = catalog_match.group(1) if catalog_match else None
+
+        base_loc_match = re.search(r"BASE_LOCATION\s*=\s*['\"]([^'\"]+)['\"]", ddl, re.IGNORECASE)
+        base_location = base_loc_match.group(1) if base_loc_match else None
+
+        # Clean up
+        if external_volume_name:
+            external_volume_name = external_volume_name.rstrip("/*").rstrip("/")
+        if base_location:
+            base_location = base_location.rstrip("/*").rstrip("/")
+        if catalog_name:
+            catalog_name = catalog_name.rstrip("/*").rstrip("/")
+
+        st.subheader("📂 External Volume, Catalog & Location Information")
+        st.write(f"**External Volume:** {external_volume_name}")
+        st.write(f"**Catalog:** {catalog_name}")
+        st.write(f"**Base Location:** {base_location}")
+
+    except Exception as e:
+        st.error(f"Error extracting DDL details: {e}")
+        st.code(ddl)
+        st.stop()
+
+# ---------- Resolve Stage ----------
+with st.spinner("Resolving Stage..."):
+    try:
         ev_sql = f"""
             SELECT S3_PATH
             FROM METADATA_VIEWER_DB.APP_SETUP.EXTERNAL_VOLUME_PATHS
             WHERE VOLUME_NAME='{external_volume_name}'
         """
         ev_df = session.sql(ev_sql).to_pandas()
-        ev_s3_path = ev_df['S3_PATH'].iloc[0].rstrip("/") if not ev_df.empty else None
-        if not ev_s3_path:
-            st.error(f"❌ S3_PATH not found for External Volume: {external_volume_name}")
+        if ev_df.empty:
+            st.error(f"S3_PATH not found for External Volume: {external_volume_name}")
             st.stop()
+        ev_s3_path = ev_df['S3_PATH'].iloc[0].rstrip("/*").rstrip("/")
 
-        ev_s3_path = ev_s3_path.rstrip("/").rstrip("/*").rstrip("/")
-        stage_row = stages_df.loc[stages_df['FULL_NAME'] == selected_stage]
-        stage_url = stage_row['URL'].iloc[0].rstrip("/") if not stage_row.empty else ""
-        stage_url_slash = stage_url + '/' if not stage_url.endswith('/') else stage_url
-        if ev_s3_path.startswith(stage_url_slash):
-            relative_prefix = ev_s3_path[len(stage_url_slash):]
-        else:
-            relative_prefix = ev_s3_path.split('/', 3)[-1]
-        if base_location:
-            relative_prefix = "/".join([relative_prefix.rstrip("/"), base_location.lstrip("/")])
+        stage_sql = f"""
+            SELECT STAGE_NAME,DATABASE_NAME,SCHEMA_NAME,STAGE_URL
+            FROM METADATA_VIEWER_DB.APP_SETUP.STAGE_PATHS
+            WHERE STAGE_URL IS NOT NULL
+        """
+        stage_df = session.sql(stage_sql).to_pandas()
+        resolved_stage = None
+        for idx, row in stage_df.iterrows():
+            stage_url = row['STAGE_URL'].rstrip("/*").rstrip("/")
+            if ev_s3_path.startswith(stage_url):
+                resolved_stage = f"{row['DATABASE_NAME']}.{row['SCHEMA_NAME']}.{row['STAGE_NAME']}"
+                break
+        if not resolved_stage:
+            st.error("❌ Could not resolve stage for the External Volume path.")
+            st.stop()
+        st.success(f"✅ Resolved Stage: `{resolved_stage}`")
+
+        relative_prefix = ev_s3_path[len(stage_url)+1:] if ev_s3_path.startswith(stage_url+"/") else ""
+        relative_prefix = "/".join([relative_prefix.rstrip("/"), base_location.lstrip("/")])
         ls_pattern = f"{relative_prefix}.*"
-        st.success(f"Resolved LS pattern: `{ls_pattern}`")
+
     except Exception as e:
-        st.error(f"Error resolving External Volume path: {e}")
+        st.error(f"Error resolving stage/external volume: {e}")
         st.stop()
 
 # ---------- List files ----------
 with st.spinner("Listing files..."):
     try:
-        if not selected_stage:
-            st.warning("Please select and submit a Stage to list files.")
-            st.stop()
-        ls_sql = f"LS @{selected_stage} PATTERN='{ls_pattern}'"
+        ls_sql = f"LS @{resolved_stage} PATTERN='{ls_pattern}'"
         files_df = session.sql(ls_sql).to_pandas()
         if files_df.empty:
             st.warning("No files found at the base location.")
             st.stop()
-
         files_df.columns = [c.strip('"').upper() for c in files_df.columns]
         files_df = files_df[~files_df['NAME'].str.endswith(('.crc', '.bin'))]
         files_df['LABEL'] = files_df['NAME'] + " | " + files_df['LAST_MODIFIED'].astype(str)
@@ -420,28 +427,28 @@ if st.button("📖 Read File"):
 
     try:
         with st.spinner("Downloading file from stage..."):
-            session.file.get(f"@{selected_stage}/{selected_file_only_path}", tmp_dir)
+            session.file.get(f"@{resolved_stage}/{selected_file_only_path}", tmp_dir)
 
-        with st.spinner("Reading and analyzing file..."):
-            if file_ext in ["json","ndjson"]:
-                records=[]
-                with open(local_file_path,"r",encoding="utf-8") as f:
+        with st.spinner("Reading and Generating AI Summary for file..."):
+            if file_ext in ["json", "ndjson"]:
+                records = []
+                with open(local_file_path, "r", encoding="utf-8") as f:
                     try:
-                        obj=json.load(f)
-                        records=obj if isinstance(obj,list) else [obj]
+                        obj = json.load(f)
+                        records = obj if isinstance(obj, list) else [obj]
                     except json.JSONDecodeError:
+                        f.seek(0)
                         for line in f:
-                            line=line.strip()
+                            line = line.strip()
                             if not line:
                                 continue
                             try:
                                 records.append(json.loads(line))
                             except Exception:
-                                pass
+                                records.append({"raw_line": line})
                 render_json_avro_view(records, local_file_path)
-
                 with st.expander("📌 AI Summary", expanded=False):
-                    ai_summary=safe_cortex_call(records)
+                    ai_summary = safe_cortex_call(records)
                     st.text(ai_summary)
 
             elif file_ext=="avro":
@@ -450,10 +457,9 @@ if st.button("📖 Read File"):
                     reader = fastavro.reader(f)
                     for i, record in enumerate(reader):
                         records.append(record)
-                        if i>=9999999:  # effectively all records
+                        if i>=9999999:
                             break
                 render_json_avro_view(records, local_file_path)
-
                 with st.expander("📌 AI Summary", expanded=False):
                     ai_summary=safe_cortex_call(records)
                     st.text(ai_summary)
