@@ -29,8 +29,8 @@ This project allows you to:
 
 ## ⚙️ Prerequisites
 
-- Snowflake account with roles: `ACCOUNTADMIN`, `SYSADMIN`  
-- AWS S3 bucket(s) and an IAM Role with access  
+- Snowflake account with roles: `ACCOUNTADMIN`, `SYSADMIN` if External Stages is not already created. Else Usage on Stages would be enough.
+- AWS S3 bucket(s) and an IAM Role with access for External Stage Setup 
 - Streamlit feature enabled in Snowflake (required packages are to be selected in SiS).  
 
 ---
@@ -41,11 +41,13 @@ The setup must be executed in the following order.
 
 ---
 
-### 1️⃣ Setup Snowflake Storage Integration & Stage
+### 1️⃣ Setup Snowflake Storage Integration & Stage 
+
+(Required only if External Stages Pointing to existing External Volume doesn't exist)
 
 The setup script for creating the storage integration and stage is provided in the `setup` directory:  
 
-[📄 Storage Integration & Stage Setup Script](./setup/StorageIntegration_StageSetup.sql)
+[📄 Storage Integration & Stage Setup Script](./setup/1_StorageIntegration_StageSetup.sql)
 
 **Instructions:**
 
@@ -58,17 +60,17 @@ The setup script for creating the storage integration and stage is provided in t
 
 ---
 
-### 2️⃣ Extract External Volume Information
+### 2️⃣ Extract External Volume & Stage Path Information
 
 The setup script to extract external volume info and populate the metadata table is in the `setup` directory:
 
-[📄 External Volume Details Extraction Script](./setup/ExternalVolumeSetupScript.sql)
+[📄 External Volume & Stage URL Details Extraction Script](./setup/2_External_Volume_and_Stage_SetupScript.sql)
 
 **Instructions:**
 
 1. Open the script in Snowflake.  
-2. Execute it to populate the `EXTERNAL_VOLUME_PATHS` table in your database.  
-3. Ensure the SYSADMIN role has the necessary usage and select privileges.
+2. Execute it to populate the `EXTERNAL_VOLUME_PATHS` & `STAGE_PATHS` table in your database.  
+3. Ensure the SYSADMIN or Streamlit role has the necessary usage privileges.
 
 ---
 
@@ -85,7 +87,6 @@ The Streamlit app is provided in the `app` directory:
 2. Launch the app using Streamlit.  
 3. Steps inside the app:
 
-- Select the Snowflake external stage corresponding to your S3 bucket.  
 - Choose the database and Iceberg table you want to explore.  
 - The app automatically resolves `BASE_LOCATION` and the external volume path.  
 - List files and preview JSON, AVRO, or Parquet files.  
@@ -95,7 +96,6 @@ The Streamlit app is provided in the `app` directory:
 
 ## 🖥 Usage
 
-- **Stage Selection:** Choose the external stage for the S3 bucket.  
 - **Database/Table Selection:** Select the Iceberg table.  
 - **File Viewing:** Filter files by dropdown or search. Preview metadata or sample data depending on the file type.  
 - **Parquet Files:** Display metadata, sample data, or both.  
