@@ -25,6 +25,8 @@ This project allows you to:
 - Interactively explore Iceberg tables and preview JSON, AVRO, and Parquet files.  
 - Generate AI-based summaries of file contents for quick insights.
 
+![Demo](app_demo.gif)
+
 ---
 
 ## ⚙️ Prerequisites
@@ -110,14 +112,5 @@ The Streamlit app is provided in the `app` directory:
 - User responsibility: select the correct stage for each S3 bucket.  
 - Supported file types: JSON, NDJSON, AVRO, Parquet.  
 
----
-
-## 📷 Media / Screenshots
-
-> Placeholder for images showing the app UI and workflow:
-
-
-> YouTube demo video placeholder:  
-[![Watch the demo](https://img.youtube.com/vi/<VIDEO_ID>/0.jpg)](https://www.youtube.com/watch?v=<VIDEO_ID>)
 
 ---
