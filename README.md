@@ -108,9 +108,6 @@ The Streamlit app is provided in the `app` directory:
 ## ⚠️ Notes
 
 - `.crc` and `.bin` files from Delta logs are ignored in previews.  
-- Ensure the selected stage matches the S3 path of the external volume.  
-- User responsibility: select the correct stage for each S3 bucket.  
-- Supported file types: JSON, NDJSON, AVRO, Parquet.  
+- Ensure the stage exist and authorized that matches the S3 path of the external volume.  
+- Supported file types: JSON, AVRO, Parquet.  
 
-
----
