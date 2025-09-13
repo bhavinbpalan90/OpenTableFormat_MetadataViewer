@@ -138,20 +138,20 @@ def show_parquet_metadata(local_file_path: str):
 
 def render_parquet_view(metadata_dict):
     st.subheader("📊 Parquet Metadata")
-    with st.expander("Overview", expanded=False):
+    with st.expander("**📝 Overview**", expanded=False):
         st.json(metadata_dict["overview"])
-    with st.expander("Schema (columns)", expanded=False):
+    with st.expander("**🗄️ Schema (columns)**", expanded=False):
         if not metadata_dict["schema_df"].empty:
             st.dataframe(metadata_dict["schema_df"])
         else:
             st.write("No schema available.")
-    with st.expander("Key-Value Metadata", expanded=False):
+    with st.expander("**🔑 Key-Value Metadata**", expanded=False):
         if metadata_dict["kv"]:
             st.json(metadata_dict["kv"])
         else:
             st.write("No key-value metadata present.")
     for i, rg in enumerate(metadata_dict["row_groups"], start=1):
-        with st.expander(f"Row Group {i}", expanded=False):
+        with st.expander(f"**📦 Row Group {i}**", expanded=False):
             rg_header = {
                 "num_rows": rg.get("num_rows"),
                 "total_byte_size": rg.get("total_byte_size")
@@ -176,7 +176,7 @@ def render_parquet_view(metadata_dict):
                 st.dataframe(pd.DataFrame(rows))
             else:
                 st.write("No column-level details available for this row group.")
-    with st.expander("Raw Metadata JSON", expanded=False):
+    with st.expander("**📄 Raw Metadata JSON**", expanded=False):
         st.json({
             "schema": str(metadata_dict["schema_df"]),
             "row_groups": metadata_dict["row_groups"]
@@ -184,7 +184,7 @@ def render_parquet_view(metadata_dict):
 
 def render_json_avro_view(records: list, file_path: str):
     st.subheader("📄 File Information")
-    with st.expander("Raw File View", expanded=False):
+    with st.expander("**📄 Raw File View**", expanded=False):
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 try:
@@ -207,7 +207,7 @@ def render_json_avro_view(records: list, file_path: str):
             st.write(f"Unable to load JSON: {e}")
             st.write(records if records else "No records available")
 
-    with st.expander("Tabular Format", expanded=False):
+    with st.expander("**🧾 Tabular Format**", expanded=False):
         if records:
             try:
                 st.dataframe(pd.DataFrame(records))
@@ -390,7 +390,7 @@ with st.spinner("Resolving Stage..."):
 
         # ---------- SHOW HOW LS PATTERN IS GENERATED ----------
         #st.subheader("🔹 LS Pattern Generation Details")
-        with st.expander("🔹 **LS Pattern Generation Details**", expanded=False):
+        with st.expander("🔹 **Files Path Generation Details**", expanded=False):
             st.success(f"✅ Resolved Stage: `{resolved_stage}`")
             st.write(f"**Stage URL:** {stage_url}")
             st.write(f"**External Volume S3 Path:** {ev_s3_path}")
@@ -525,7 +525,7 @@ if st.button("📖 Read File"):
                             except Exception:
                                 records.append({"raw_line": line})
                 render_json_avro_view(records, local_file_path)
-                with st.expander("📌 AI Summary", expanded=False):
+                with st.expander("📌 **AI Summary**", expanded=False):
                     ai_summary = safe_cortex_call(records)
                     st.text(ai_summary)
 
@@ -538,7 +538,7 @@ if st.button("📖 Read File"):
                         if i >= 9999999:
                             break
                 render_json_avro_view(records, local_file_path)
-                with st.expander("📌 AI Summary", expanded=False):
+                with st.expander("📌 **AI Summary**", expanded=False):
                     ai_summary = safe_cortex_call(records)
                     st.text(ai_summary)
 
